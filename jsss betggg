@@ -1,0 +1,197 @@
+let currentBet = 0;
+let betType = null;
+let score = 0;
+let history = [];
+let isRolling = false;
+
+const diceElements = [document.getElementById('dice1'), document.getElementById('dice2'), document.getElementById('dice3')];
+const rollBtn = document.getElementById('roll-btn');
+const betStatusEl = document.getElementById('bet-status');
+const scoreEl = document.getElementById('score');
+const currentBetEl = document.getElementById('current-bet');
+const totalEl = document.getElementById('total');
+const resultTextEl = document.getElementById('result-text');
+const historyEl = document.getElementById('history');
+
+// Thiết lập cược
+function setBet(type) {
+    const betAmount = parseInt(document.getElementById('bet-input').value);
+    
+    if (betAmount < 10 || betAmount > 1000) {
+        alert('Cược phải từ 10 đến 1000 điểm!');
+        return;
+    }
+
+    if (score < betAmount) {
+        alert('Bạn không đủ điểm để cược!');
+        return;
+    }
+
+    // Xóa active class từ tất cả nút
+    document.querySelectorAll('.bet-btn').forEach(btn => btn.classList.remove('active'));
+    
+    // Thêm active class vào nút được chọn
+    if (type === 'tai') {
+        document.querySelector('.tai-btn').classList.add('active');
+    } else {
+        document.querySelector('.xiu-btn').classList.add('active');
+    }
+
+    currentBet = betAmount;
+    betType = type;
+    currentBetEl.textContent = currentBet;
+    betStatusEl.textContent = `Đã đặt cược ${currentBet} điểm cho ${type.toUpperCase()}`;
+    rollBtn.disabled = false;
+}
+
+// Hàm vẽ xúc xắc
+function drawDice(diceElement, value) {
+    diceElement.innerHTML = '';
+    
+    const dotPatterns = {
+        1: [[5]],
+        2: [[1, 9], [5], [9, 1]],
+        3: [[1], [5], [9]],
+        4: [[1, 3], [7, 9]],
+        5: [[1, 3], [5], [7, 9]],
+        6: [[1, 3], [4, 6], [7, 9]]
+    };
+
+    const pattern = dotPatterns[value];
+    for (let row of pattern) {
+        for (let position of row) {
+            const dot = document.createElement('div');
+            dot.className = 'dot';
+            diceElement.appendChild(dot);
+        }
+    }
+}
+
+// Roll xúc xắc
+function rollDice() {
+    if (!betType || currentBet === 0) {
+        alert('Hãy đặt cược trước!');
+        return;
+    }
+
+    if (isRolling) return;
+    
+    isRolling = true;
+    rollBtn.disabled = true;
+    resultTextEl.textContent = '';
+
+    // Hiệu ứng quay xúc xắc
+    diceElements.forEach(dice => dice.classList.add('rolling'));
+
+    let rollCount = 0;
+    const maxRolls = 20;
+    const rollInterval = setInterval(() => {
+        const diceValues = [getRandomDice(), getRandomDice(), getRandomDice()];
+        diceValues.forEach((value, index) => {
+            drawDice(diceElements[index], value);
+        });
+        rollCount++;
+
+        if (rollCount >= maxRolls) {
+            clearInterval(rollInterval);
+            // Xúc xắc cuối cùng
+            const finalDiceValues = [getRandomDice(), getRandomDice(), getRandomDice()];
+            finalDiceValues.forEach((value, index) => {
+                drawDice(diceElements[index], value);
+            });
+            diceElements.forEach(dice => dice.classList.remove('rolling'));
+            
+            checkResult(finalDiceValues);
+            isRolling = false;
+        }
+    }, 50);
+}
+
+function getRandomDice() {
+    return Math.floor(Math.random() * 6) + 1;
+}
+
+// Kiểm tra kết quả
+function checkResult(diceValues) {
+    const total = diceValues.reduce((a, b) => a + b, 0);
+    totalEl.textContent = total;
+
+    let isWin = false;
+    if (betType === 'tai' && total >= 11) {
+        isWin = true;
+    } else if (betType === 'xiu' && total <= 10) {
+        isWin = true;
+    }
+
+    let winAmount = 0;
+    if (isWin) {
+        winAmount = Math.round(currentBet * 1.9);
+        score += winAmount;
+        resultTextEl.textContent = `🎉 THẮNG! +${winAmount} điểm`;
+        resultTextEl.className = 'result-win';
+    } else {
+        score -= currentBet;
+        resultTextEl.textContent = `😢 THUA! -${currentBet} điểm`;
+        resultTextEl.className = 'result-lose';
+        winAmount = -currentBet;
+    }
+
+    scoreEl.textContent = score;
+
+    // Thêm vào lịch sử
+    addHistory({
+        type: betType.toUpperCase(),
+        total: total,
+        bet: currentBet,
+        result: isWin ? 'WIN' : 'LOSE',
+        amount: winAmount
+    });
+
+    // Reset
+    currentBet = 0;
+    betType = null;
+    currentBetEl.textContent = '0';
+    document.querySelectorAll('.bet-btn').forEach(btn => btn.classList.remove('active'));
+    betStatusEl.textContent = 'Hãy đặt cược để bắt đầu';
+    rollBtn.disabled = true;
+}
+
+// Thêm vào lịch sử
+function addHistory(record) {
+    history.unshift(record);
+    if (history.length > 10) {
+        history.pop();
+    }
+
+    updateHistoryDisplay();
+}
+
+function updateHistoryDisplay() {
+    if (history.length === 0) {
+        historyEl.innerHTML = '<p class="empty-history">Chưa có cược nào</p>';
+        return;
+    }
+
+    historyEl.innerHTML = history.map((record, index) => {
+        const resultClass = record.result === 'WIN' ? 'win' : 'lose';
+        const icon = record.result === 'WIN' ? '✅' : '❌';
+        return `
+            <div class="history-item ${resultClass}">
+                <div>
+                    <span class="result">${icon} ${record.type} - Tổng: ${record.total}</span>
+                    <span class="amount"> | Cược: ${record.bet}</span>
+                </div>
+                <div style="color: ${record.result === 'WIN' ? '#51cf66' : '#ff6b6b'}; font-weight: bold;">
+                    ${record.amount > 0 ? '+' : ''}${record.amount}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Khởi tạo
+window.addEventListener('load', () => {
+    score = 1000; // Điểm ban đầu
+    scoreEl.textContent = score;
+    rollBtn.disabled = true;
+});
